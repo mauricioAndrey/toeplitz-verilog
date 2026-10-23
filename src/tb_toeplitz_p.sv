@@ -8,6 +8,7 @@
 
 //`define VERBOSE
 //`define DEBUG
+`define COUNT_CLOCKS
 
 timeunit 1ns;
 timeprecision 100fs;
@@ -86,8 +87,7 @@ task check(input string fn);
 `ifdef VERBOSE
   $display("q=%b", q);
   $display("y=%b", {y[0], y[1]});
-`endif
-  if(q == {y[0], y[1]})
+  if(q === {y[0], y[1]})
     $display("PASS: %s", fn);
   else begin
     $display("FAIL: %s", fn);
@@ -95,6 +95,8 @@ task check(input string fn);
     $display("   Esperado: y=%h", {y[0], y[1]});
     $fatal(1, "Resultado incorreto");
   end
+`endif
+  assert(q == {y[0], y[1]});
   #1;
 endtask
 
@@ -105,5 +107,44 @@ initial begin
   check("y64-nr4-hex.dat");
   $finish;
 end
+
+
+// lógica da contagem de pulsos de clock para cada operação
+
+`ifdef COUNT_CLOCKS
+
+integer cycle_count = 0;
+integer start_cycle = 0;
+integer previous_strobe_cycle = 0;
+integer operation_count = 0;
+integer total_cycles = 0;
+
+always @(posedge clk) begin
+  cycle_count = cycle_count + 1;
+end
+
+initial begin
+  wait(reset == 0);
+  @(posedge clk);
+  #0.01;
+  start_cycle = cycle_count;
+end
+
+always @(posedge qstrobe) begin
+  #0.01;
+  operation_count = operation_count + 1;
+  if (operation_count == 1) begin
+    total_cycles = cycle_count - start_cycle + 1;
+  end else begin
+    total_cycles = cycle_count - previous_strobe_cycle;
+  end
+  $display("--------------------------------");
+  $display("Operation: %0d", operation_count);
+  $display("Total clock cycles: %0d", total_cycles);
+  $display("Simulation time: %t", $time);
+  $display("--------------------------------");
+  previous_strobe_cycle = cycle_count;
+end
+`endif 
 
 endmodule: tb_toeplitz_p
